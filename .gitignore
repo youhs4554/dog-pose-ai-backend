@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+runs/
+datasets/
+output/
+streamlit/
+*.pt
+*.cache
+wandb/
+events.out.tfevents*
