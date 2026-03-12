@@ -5,13 +5,20 @@ description = "Ultralytics dog pose training script and Streamlit MVP."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
+    "fastapi>=0.116.0",
+    "httpx>=0.28.1",
     "numpy>=2.2.0",
     "opencv-python-headless>=4.11.0.86",
     "pandas>=2.2.0",
     "pillow>=11.1.0",
+    "python-multipart>=0.0.20",
     "streamlit>=1.43.0",
     "ultralytics>=8.3.0",
+    "uvicorn>=0.35.0",
 ]
+
+[project.scripts]
+dog-pose-api = "dog_pose_mvp.api.main:run"
 
 [build-system]
 requires = ["hatchling"]

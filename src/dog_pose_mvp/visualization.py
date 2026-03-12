@@ -41,6 +41,11 @@ class PreviewResult:
         self.keypoints = keypoints
 
 
+DEFAULT_DOG_POSE_MODEL_PATH = Path("runs/pose/dog-pose-colab-longrun/weights/best.pt")
+DEFAULT_DOG_POSE_LAST_MODEL_PATH = Path("runs/pose/dog-pose-colab-longrun/weights/last.pt")
+DEFAULT_WARMSTART_MODEL_PATH = Path("yolo26n-pose.pt")
+
+
 def validate_dog_keypoints(result: Any) -> None:
     if result.keypoints is None:
         return
@@ -68,14 +73,14 @@ def resolve_default_model_path() -> str:
                 return str(candidate)
 
     candidates = [
-        Path("runs/pose/dog-pose-mps-1epoch/weights/best.pt"),
-        Path("runs/pose/dog-pose-mps-1epoch/weights/last.pt"),
-        Path("yolo26n-pose.pt"),
+        DEFAULT_DOG_POSE_MODEL_PATH,
+        DEFAULT_DOG_POSE_LAST_MODEL_PATH,
+        DEFAULT_WARMSTART_MODEL_PATH,
     ]
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)
-    return str(candidates[0])
+    return str(DEFAULT_DOG_POSE_MODEL_PATH)
 
 
 def load_image(image: Image.Image) -> np.ndarray:
