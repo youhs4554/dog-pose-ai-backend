@@ -128,15 +128,235 @@ curl -X POST http://127.0.0.1:8000/api/v1/inference/video \
   -F "include_trend_data=true"
 ```
 
-Postman에서 재생 영상을 바로 확인하고 싶으면 두 가지 방법을 쓸 수 있다.
+## API Specification
 
-- JSON 응답이 필요하면 `include_playback_video=true`로 요청해서 `playback_video_base64`와 `playback_video_data_url`를 함께 받는다.
-- Postman Preview에서 바로 렌더링하려면 `response_format=html`을 추가하면 `<video>` 태그가 포함된 HTML 응답을 받는다.
+Base URL:
 
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/inference/video \
-  -F "file=@/path/to/walk.mp4" \
-  -F "response_format=html"
+```text
+http://127.0.0.1:8000
+```
+
+문서 엔드포인트:
+
+- Swagger UI: `/docs`
+- OpenAPI JSON: `/openapi.json`
+
+공통 사항:
+
+- `POST /api/v1/inference/image`와 `POST /api/v1/inference/video`는 `multipart/form-data` 요청이다.
+- 파일 필드 이름은 둘 다 `file`이다.
+- 에러 응답은 공통적으로 `{"error": {"code": "...", "message": "...", "details": {...}}}` 형식을 사용한다.
+
+### Endpoint Summary
+
+| Method | Path | Description |
+|------|------|-------------|
+| `GET` | `/` | API 메타데이터 반환 |
+| `GET` | `/api/v1/health` | 서버 상태와 기본 모델 경로 확인 |
+| `GET` | `/api/v1/model` | 현재 해석되는 모델 경로 확인 |
+| `POST` | `/api/v1/inference/image` | 단일 이미지 pose 추론 |
+| `POST` | `/api/v1/inference/video` | 비디오 보행 분석 |
+
+### `GET /`
+
+설명:
+
+- API 이름, 버전, 문서 경로를 반환한다.
+
+응답 예시:
+
+```json
+{
+  "name": "Dog Pose FastAPI",
+  "version": "0.1.0",
+  "docs": "/docs",
+  "openapi": "/openapi.json"
+}
+```
+
+### `GET /api/v1/health`
+
+설명:
+
+- 서버가 정상 동작하는지 확인한다.
+- 현재 기본 체크포인트 경로와 파일 존재 여부를 함께 반환한다.
+
+응답 예시:
+
+```json
+{
+  "status": "ok",
+  "app_name": "dog-pose-fastapi",
+  "version": "0.1.0",
+  "default_model_path": "/absolute/path/to/runs/pose/dog-pose-colab-longrun/weights/best.pt",
+  "default_model_exists": true
+}
+```
+
+### `GET /api/v1/model`
+
+Query parameter:
+
+- `model_path`: 선택. 특정 체크포인트 경로를 넘기면 그 경로를 기준으로 확인한다.
+
+응답 예시:
+
+```json
+{
+  "requested_model_path": null,
+  "resolved_model_path": "/absolute/path/to/runs/pose/dog-pose-colab-longrun/weights/best.pt",
+  "exists": true,
+  "is_default": true
+}
+```
+
+### `POST /api/v1/inference/image`
+
+Form fields:
+
+- `file`: 필수. `jpg`, `jpeg`, `png`, `webp` 이미지 파일
+- `model_path`: 선택. 체크포인트 경로 override
+- `conf_threshold`: 선택. detection confidence threshold, 기본 `0.25`
+- `keypoint_threshold`: 선택. skeleton keypoint threshold, 기본 `0.35`
+- `image_size`: 선택. 추론 입력 크기, 기본 `640`
+- `include_overlay`: 선택. 오버레이 이미지 포함 여부, 기본 `true`
+
+응답 주요 필드:
+
+- `model_path`: 실제 추론에 사용한 모델 경로
+- `image_width`, `image_height`: 입력 이미지 크기
+- `detections`: 감지된 개체 목록
+- `overlay_image_base64`: 오버레이 JPEG base64
+- `overlay_media_type`: 오버레이 MIME type
+
+`detections[]` 주요 필드:
+
+- `instance`: detection index
+- `confidence`: detection confidence
+- `box`: bounding box (`x1`, `y1`, `x2`, `y2`)
+- `visible_keypoints`: threshold 이상 keypoint 수
+- `keypoints`: 관절별 좌표와 confidence
+
+응답 예시:
+
+```json
+{
+  "model_path": "/absolute/path/to/runs/pose/dog-pose-colab-longrun/weights/best.pt",
+  "image_width": 1280,
+  "image_height": 720,
+  "confidence_threshold": 0.25,
+  "keypoint_threshold": 0.35,
+  "image_size": 640,
+  "detections": [
+    {
+      "instance": 0,
+      "confidence": 0.94,
+      "box": {
+        "x1": 120.4,
+        "y1": 80.2,
+        "x2": 980.1,
+        "y2": 640.7
+      },
+      "visible_keypoints": 24,
+      "keypoints": [
+        {
+          "joint": "nose",
+          "x": 544.8,
+          "y": 161.2,
+          "confidence": 0.98,
+          "visible": true
+        }
+      ]
+    }
+  ],
+  "overlay_image_base64": "....",
+  "overlay_media_type": "image/jpeg"
+}
+```
+
+### `POST /api/v1/inference/video`
+
+Form fields:
+
+- `file`: 필수. 보행 비디오 파일
+- `model_path`: 선택. 체크포인트 경로 override
+- `conf_threshold`: 선택. detection confidence threshold, 기본 `0.25`
+- `keypoint_threshold`: 선택. skeleton keypoint threshold, 기본 `0.35`
+- `image_size`: 선택. 추론 입력 크기, 기본 `640`
+- `analysis_fps`: 선택. 분석 FPS, `0`이면 원본 FPS 사용
+- `max_frames`: 선택. 최대 분석 프레임 수, `0`이면 전체
+- `include_frame_previews`: 선택. 프레임별 오버레이 JPEG 포함 여부
+- `include_playback_video`: 선택. 재생용 분석 비디오 base64 포함 여부
+- `include_trend_data`: 선택. 안정화된 시계열 데이터 포함 여부
+- `response_format`: 선택. `json` 또는 `html`, 기본 `json`
+
+응답 주요 필드:
+
+- `source_fps`, `analyzed_fps`, `total_frames`, `total_duration_sec`, `frame_step`
+- `analyzed_frames`: 프레임별 metric, keypoint record, optional preview image
+- `trend`: 안정화된 시계열 metric 배열
+- `gait_summary`, `gait_stats`, `gait_note`, `gait_status`
+- `mpl_summary`, `mpl_stats`, `mpl_note`, `mpl_status`, `mpl_primary_side`
+- `playback_video_base64`: 분석 playback mp4 base64
+- `playback_video_media_type`: 보통 `video/mp4`
+- `playback_video_data_url`: 브라우저나 클라이언트에서 바로 사용할 수 있는 `data:` URL
+
+JSON 응답 예시:
+
+```json
+{
+  "model_path": "/absolute/path/to/runs/pose/dog-pose-colab-longrun/weights/best.pt",
+  "source_fps": 29.97,
+  "analyzed_fps": 10.0,
+  "total_frames": 180,
+  "total_duration_sec": 6.01,
+  "frame_step": 3,
+  "analyzed_frames": [
+    {
+      "frame_index": 0,
+      "time_sec": 0.0,
+      "metrics": {
+        "detected": 1,
+        "body_axis_angle_deg": 4.5
+      },
+      "records": []
+    }
+  ],
+  "trend": [
+    {
+      "time_sec": 0.0,
+      "body_axis_angle_deg": 4.5
+    }
+  ],
+  "gait_note": "stable gait",
+  "gait_status": "정상 패턴에 가까움",
+  "mpl_note": "low concern",
+  "mpl_status": "정상 패턴에 가까움",
+  "playback_video_base64": "....",
+  "playback_video_media_type": "video/mp4",
+  "playback_video_data_url": "data:video/mp4;base64,...."
+}
+```
+
+HTML 응답:
+
+- `response_format=html`로 요청하면 `<video>` 태그가 포함된 HTML 문서를 반환한다.
+- 간단한 미리보기 페이지가 필요할 때 사용할 수 있다.
+
+### Error Response
+
+에러 예시:
+
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "message": "Model checkpoint was not found: /absolute/path/to/best.pt",
+    "details": {
+      "resolved_model_path": "/absolute/path/to/best.pt"
+    }
+  }
+}
 ```
 
 ## Colab GPU training
